@@ -30,6 +30,11 @@ func NewBracketHandler(database *db.DB, cfg *config.Config, hub *ws.Hub) *Bracke
 
 func (h *BracketHandler) lobbies() *mongo.Collection { return h.DB.Collection("lobbies") }
 
+// isManager — создатель ИЛИ админ.
+func (h *BracketHandler) isManager(c *fiber.Ctx, l models.Lobby) bool {
+	return l.CreatorID == middleware.UserID(c) || middleware.IsAdmin(c, h.Cfg.JWTSecret)
+}
+
 func (h *BracketHandler) load(c *fiber.Ctx, ctx context.Context) (models.Lobby, error) {
 	var l models.Lobby
 	id, err := primitive.ObjectIDFromHex(c.Params("id"))
@@ -54,8 +59,8 @@ func (h *BracketHandler) GenerateBracket(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "сформировать сетку может только создатель")
+	if !h.isManager(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "сформировать сетку может только создатель или админ")
 	}
 	if l.Status != models.StatusDraft {
 		return fiber.NewError(fiber.StatusConflict, "сетку можно сформировать только после драфта")
@@ -180,8 +185,8 @@ func (h *BracketHandler) MatchResult(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "вводить результаты может только создатель")
+	if !h.isManager(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "вводить результаты может только создатель или админ")
 	}
 	if l.Status != models.StatusActive {
 		return fiber.NewError(fiber.StatusConflict, "турнир не активен")
@@ -234,8 +239,8 @@ func (h *BracketHandler) Finish(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "завершить может только создатель")
+	if !h.isManager(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "завершить может только создатель или админ")
 	}
 	if l.Status != models.StatusActive {
 		return fiber.NewError(fiber.StatusConflict, "турнир не активен")

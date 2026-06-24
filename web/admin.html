@@ -40,6 +40,16 @@
           <tbody id="rows"></tbody>
         </table>
       </div>
+
+      <h2 class="text-xl font-bold mb-4 mt-8">Лобби (<span id="lcount">0</span>)</h2>
+      <div class="card overflow-x-auto">
+        <table class="table">
+          <thead>
+            <tr><th>Название</th><th>Тип</th><th>Статус</th><th>Игроки</th><th>Действия</th></tr>
+          </thead>
+          <tbody id="lrows"></tbody>
+        </table>
+      </div>
     </div>
   </main>
 
@@ -112,6 +122,28 @@
       catch (err) { const el=document.getElementById("modalErr"); el.textContent=err.message; el.classList.remove("hidden"); }
     };
 
+    const STATUS_RU = { open: "Сбор", draft: "Драфт", active: "Идёт", finished: "Завершён" };
+    async function loadLobbies() {
+      const data = await api("GET", "/admin/lobbies");
+      document.getElementById("lcount").textContent = data.lobbies.length;
+      document.getElementById("lrows").innerHTML = data.lobbies.length ? data.lobbies.map(l => `
+        <tr>
+          <td class="font-medium">${esc(l.name)}</td>
+          <td class="muted">${esc(l.type)}</td>
+          <td>${STATUS_RU[l.status] || l.status}</td>
+          <td class="muted">${l.players_count}/${l.max_players}</td>
+          <td class="whitespace-nowrap">
+            <a href="/lobby.html?id=${l.id}" target="_blank" class="btn btn--ghost btn--sm">Открыть</a>
+            <button onclick="delLobby('${l.id}','${esc(l.name)}')" class="btn btn--danger btn--sm">Удалить</button>
+          </td>
+        </tr>`).join("") : `<tr><td colspan="5" class="muted">Лобби нет</td></tr>`;
+    }
+    async function delLobby(id, name) {
+      if (!confirm(`Удалить лобби «${name}»? (любой статус)`)) return;
+      try { await api("DELETE", `/admin/lobbies/${id}`); await loadLobbies(); }
+      catch (e) { showErr(e.message); }
+    }
+
     async function adminLogout() { try { await api("POST", "/admin/logout"); } catch {} showPanel(false); }
     function showPanel(on) {
       document.getElementById("panel").classList.toggle("hidden", !on);
@@ -122,12 +154,12 @@
     document.getElementById("loginForm").onsubmit = async (e) => {
       e.preventDefault();
       const o = {}; new FormData(e.target).forEach((v,k)=>o[k]=v);
-      try { await api("POST", "/admin/login", o); showPanel(true); await loadUsers(); }
+      try { await api("POST", "/admin/login", o); showPanel(true); await loadUsers(); await loadLobbies(); }
       catch (err) { showErr(err.message); }
     };
 
     async function init() {
-      try { await loadUsers(); showPanel(true); }
+      try { await loadUsers(); await loadLobbies(); showPanel(true); }
       catch { showPanel(false); }
     }
     init();

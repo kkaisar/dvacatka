@@ -128,6 +128,18 @@ func ClearAdminCookie(c *fiber.Ctx) {
 	})
 }
 
+// IsAdmin проверяет, есть ли у запроса валидная админ-сессия (cookie admin_token).
+func IsAdmin(c *fiber.Ctx, secret string) bool {
+	claims := &Claims{}
+	token, err := jwt.ParseWithClaims(c.Cookies(AdminCookieName), claims, func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, jwt.ErrSignatureInvalid
+		}
+		return []byte(secret), nil
+	})
+	return err == nil && token.Valid && claims.Admin
+}
+
 // RequireAdmin — middleware: пропускает только с валидной админ-сессией.
 func RequireAdmin(secret string) fiber.Handler {
 	return func(c *fiber.Ctx) error {

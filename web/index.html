@@ -47,6 +47,10 @@
         <input name="password" placeholder="Пароль (необязательно)" class="input" />
         <input name="payment_phone" placeholder="Телефон для оплаты" class="input" />
         <input name="payment_card" placeholder="Номер карты для оплаты" class="input" />
+        <label class="flex items-center gap-2 text-sm muted cursor-pointer">
+          <input type="checkbox" name="as_spectator" style="width:16px;height:16px" />
+          Я зритель — создаю лобби, но не играю
+        </label>
         <div class="flex gap-2 pt-1">
           <button type="button" onclick="closeCreate()" class="btn btn--ghost btn--block">Отмена</button>
           <button class="btn btn--primary btn--block">Создать</button>
@@ -70,6 +74,7 @@
       e.preventDefault();
       const o = { type: createType };
       new FormData(e.target).forEach((v, k) => o[k] = v);
+      o.as_spectator = e.target.as_spectator.checked; // чекбокс -> boolean
       try {
         const lobby = await api("POST", "/lobby/create", o);
         location.href = "/lobby.html?id=" + lobby.id;

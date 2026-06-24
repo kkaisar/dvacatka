@@ -32,6 +32,11 @@ func NewDraftHandler(database *db.DB, cfg *config.Config, hub *ws.Hub) *DraftHan
 
 func (h *DraftHandler) lobbies() *mongo.Collection { return h.DB.Collection("lobbies") }
 
+// isManager — создатель ИЛИ админ.
+func (h *DraftHandler) isManager(c *fiber.Ctx, l models.Lobby) bool {
+	return l.CreatorID == middleware.UserID(c) || middleware.IsAdmin(c, h.Cfg.JWTSecret)
+}
+
 func (h *DraftHandler) load(c *fiber.Ctx, ctx context.Context) (models.Lobby, error) {
 	var l models.Lobby
 	id, err := primitive.ObjectIDFromHex(c.Params("id"))
@@ -73,8 +78,8 @@ func (h *DraftHandler) StartDraft(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "начать драфт может только создатель")
+	if !h.isManager(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "начать драфт может только создатель или админ")
 	}
 	if l.Status != models.StatusOpen {
 		return fiber.NewError(fiber.StatusConflict, "драфт уже начат или лобби завершено")
@@ -238,8 +243,8 @@ func (h *DraftHandler) UndoPick(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "отменять пик может только создатель")
+	if !h.isManager(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "отменять пик может только создатель или админ")
 	}
 	if l.Status != models.StatusDraft || !l.Draft.Picking {
 		return fiber.NewError(fiber.StatusConflict, "сейчас не этап пиков")

@@ -10,6 +10,7 @@ import (
 	"dvacatka/db"
 	"dvacatka/middleware"
 	"dvacatka/models"
+	"dvacatka/ws"
 
 	"github.com/gofiber/fiber/v2"
 	"go.mongodb.org/mongo-driver/bson"
@@ -22,10 +23,11 @@ import (
 type AdminHandler struct {
 	DB  *db.DB
 	Cfg *config.Config
+	Hub *ws.Hub
 }
 
-func NewAdminHandler(database *db.DB, cfg *config.Config) *AdminHandler {
-	return &AdminHandler{DB: database, Cfg: cfg}
+func NewAdminHandler(database *db.DB, cfg *config.Config, hub *ws.Hub) *AdminHandler {
+	return &AdminHandler{DB: database, Cfg: cfg, Hub: hub}
 }
 
 func (h *AdminHandler) users() *mongo.Collection { return h.DB.Collection("users") }
@@ -55,6 +57,53 @@ func (h *AdminHandler) Login(c *fiber.Ctx) error {
 // Logout — POST /admin/logout.
 func (h *AdminHandler) Logout(c *fiber.Ctx) error {
 	middleware.ClearAdminCookie(c)
+	return c.JSON(fiber.Map{"ok": true})
+}
+
+// Me — GET /admin/me. Возвращает 200 если админ-сессия активна (для фронта).
+func (h *AdminHandler) Me(c *fiber.Ctx) error {
+	return c.JSON(fiber.Map{"admin": true})
+}
+
+// ListLobbies — GET /admin/lobbies. Все лобби (для мониторинга/модерации).
+func (h *AdminHandler) ListLobbies(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
+	cur, err := h.DB.Collection("lobbies").Find(ctx, bson.M{})
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "ошибка базы данных")
+	}
+	defer cur.Close(ctx)
+	var list []models.Lobby
+	if err := cur.All(ctx, &list); err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "ошибка базы данных")
+	}
+	out := make([]fiber.Map, 0, len(list))
+	for _, l := range list {
+		out = append(out, fiber.Map{
+			"id": l.ID.Hex(), "name": l.Name, "type": l.Type, "status": l.Status,
+			"players_count": len(l.Players), "max_players": l.MaxPlayers,
+			"creator_id": l.CreatorID.Hex(), "created_at": l.CreatedAt,
+		})
+	}
+	return c.JSON(fiber.Map{"lobbies": out})
+}
+
+// DeleteLobby — DELETE /admin/lobbies/:id. Админ удаляет любое лобби (включая активное).
+func (h *AdminHandler) DeleteLobby(c *fiber.Ctx) error {
+	id, err := primitive.ObjectIDFromHex(c.Params("id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "неверный id лобби")
+	}
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
+	r, err := h.DB.Collection("lobbies").DeleteOne(ctx, bson.M{"_id": id})
+	if err != nil || r.DeletedCount == 0 {
+		return fiber.NewError(fiber.StatusNotFound, "лобби не найдено")
+	}
+	h.Hub.Broadcast(id.Hex(), fiber.Map{"type": "deleted"})
 	return c.JSON(fiber.Map{"ok": true})
 }
 

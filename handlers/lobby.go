@@ -78,6 +78,11 @@ func (h *LobbyHandler) lobbies() *mongo.Collection {
 	return h.DB.Collection("lobbies")
 }
 
+// canManage — может ли запрос управлять лобби: создатель ИЛИ администратор.
+func (h *LobbyHandler) canManage(c *fiber.Ctx, l models.Lobby) bool {
+	return l.CreatorID == middleware.UserID(c) || middleware.IsAdmin(c, h.Cfg.JWTSecret)
+}
+
 // userCategory возвращает глобальную категорию пользователя (для снимка при входе в лобби).
 func (h *LobbyHandler) userCategory(ctx context.Context, uid primitive.ObjectID) models.Category {
 	var u models.User
@@ -101,11 +106,12 @@ func (h *LobbyHandler) findLobby(ctx context.Context, idHex string) (models.Lobb
 var errBadID = errors.New("bad id")
 
 type createLobbyReq struct {
-	Name           string `json:"name"`
-	Type           string `json:"type"`
-	Password       string `json:"password"`
-	PaymentPhone   string `json:"payment_phone"`
-	PaymentCard    string `json:"payment_card"`
+	Name         string `json:"name"`
+	Type         string `json:"type"`
+	Password     string `json:"password"`
+	PaymentPhone string `json:"payment_phone"`
+	PaymentCard  string `json:"payment_card"`
+	AsSpectator  bool   `json:"as_spectator"` // создатель не играет, только следит
 }
 
 // Create — POST /lobby/create. Любой авторизованный создаёт лобби и сам входит в него.
@@ -129,6 +135,11 @@ func (h *LobbyHandler) Create(c *fiber.Ctx) error {
 	defer cancel()
 
 	uid := middleware.UserID(c)
+	// Создатель попадает в игроки, кроме случая «создаю как зритель».
+	players := []models.LobbyPlayer{}
+	if !req.AsSpectator {
+		players = append(players, models.LobbyPlayer{UserID: uid, Paid: false, Category: h.userCategory(ctx, uid)})
+	}
 	lobby := models.Lobby{
 		Name:       req.Name,
 		Type:       lobbyType,
@@ -141,8 +152,7 @@ func (h *LobbyHandler) Create(c *fiber.Ctx) error {
 			Phone: strings.TrimSpace(req.PaymentPhone),
 			Card:  strings.TrimSpace(req.PaymentCard),
 		},
-		// Создатель сразу попадает в список игроков (с тиром из своего профиля).
-		Players:   []models.LobbyPlayer{{UserID: uid, Paid: false, Category: h.userCategory(ctx, uid)}},
+		Players:   players,
 		Teams:     []models.Team{},
 		Bracket:   models.Bracket{Rounds: []models.Round{}},
 		CreatedAt: time.Now(),
@@ -220,10 +230,12 @@ func (h *LobbyHandler) Delete(c *fiber.Ctx) error {
 		}
 		return fiber.NewError(fiber.StatusNotFound, "лобби не найдено")
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "удалить может только создатель")
+	admin := middleware.IsAdmin(c, h.Cfg.JWTSecret)
+	if l.CreatorID != middleware.UserID(c) && !admin {
+		return fiber.NewError(fiber.StatusForbidden, "удалить может только создатель или админ")
 	}
-	if l.Status != models.StatusOpen {
+	// Создатель удаляет только открытое; админ — любое (включая активное).
+	if l.Status != models.StatusOpen && !admin {
 		return fiber.NewError(fiber.StatusConflict, "лобби уже стартовало, удалить нельзя")
 	}
 
@@ -349,8 +361,8 @@ func (h *LobbyHandler) Kick(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "выгонять может только создатель")
+	if !h.canManage(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "выгонять может только создатель или админ")
 	}
 	target, err := primitive.ObjectIDFromHex(c.Params("user_id"))
 	if err != nil {
@@ -384,8 +396,8 @@ func (h *LobbyHandler) SetTier(c *fiber.Ctx) error {
 	if err != nil {
 		return err
 	}
-	if l.CreatorID != middleware.UserID(c) {
-		return fiber.NewError(fiber.StatusForbidden, "менять тир может только создатель")
+	if !h.canManage(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "менять тир может только создатель или админ")
 	}
 	target, err := primitive.ObjectIDFromHex(c.Params("user_id"))
 	if err != nil {
@@ -411,6 +423,68 @@ func (h *LobbyHandler) SetTier(c *fiber.Ctx) error {
 	}
 	h.broadcast(ctx, l.ID.Hex())
 	return c.JSON(fiber.Map{"ok": true, "category": req.Category})
+}
+
+// Spectate — POST /lobby/:id/spectate. Создатель выходит из списка игроков и просто следит.
+func (h *LobbyHandler) Spectate(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
+	l, err := h.loadOpen(c, ctx)
+	if err != nil {
+		return err
+	}
+	uid := middleware.UserID(c)
+	if l.CreatorID != uid {
+		return fiber.NewError(fiber.StatusForbidden, "только создатель может стать зрителем")
+	}
+	if !hasPlayer(l, uid) {
+		return c.JSON(fiber.Map{"ok": true}) // уже зритель
+	}
+	_, err = h.lobbies().UpdateByID(ctx, l.ID, bson.M{"$pull": bson.M{"players": bson.M{"user_id": uid}}})
+	if err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "не удалось стать зрителем")
+	}
+	h.broadcast(ctx, l.ID.Hex())
+	return c.JSON(fiber.Map{"ok": true})
+}
+
+type setPaidReq struct {
+	Paid bool `json:"paid"`
+}
+
+// SetPaid — POST /lobby/:id/set-paid/:user_id. Создатель/админ ставит статус оплаты игроку.
+func (h *LobbyHandler) SetPaid(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
+	l, err := h.loadOpen(c, ctx)
+	if err != nil {
+		return err
+	}
+	if !h.canManage(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "менять оплату может только создатель или админ")
+	}
+	target, err := primitive.ObjectIDFromHex(c.Params("user_id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "неверный id игрока")
+	}
+	var req setPaidReq
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "неверный формат запроса")
+	}
+	if !hasPlayer(l, target) {
+		return fiber.NewError(fiber.StatusBadRequest, "игрок не в лобби")
+	}
+	res, err := h.lobbies().UpdateOne(ctx,
+		bson.M{"_id": l.ID, "players.user_id": target},
+		bson.M{"$set": bson.M{"players.$.paid": req.Paid}},
+	)
+	if err != nil || res.MatchedCount == 0 {
+		return fiber.NewError(fiber.StatusInternalServerError, "не удалось изменить оплату")
+	}
+	h.broadcast(ctx, l.ID.Hex())
+	return c.JSON(fiber.Map{"ok": true, "paid": req.Paid})
 }
 
 // loadOpen загружает лобби и требует статус "open" (этап сбора игроков).

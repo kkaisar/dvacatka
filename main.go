@@ -65,6 +65,8 @@ func main() {
 	app.Post("/lobby/:id/toggle-paid", authReq, lobby.TogglePaid)
 	app.Post("/lobby/:id/kick/:user_id", authReq, lobby.Kick)
 	app.Post("/lobby/:id/set-tier/:user_id", authReq, lobby.SetTier)
+	app.Post("/lobby/:id/set-paid/:user_id", authReq, lobby.SetPaid)
+	app.Post("/lobby/:id/spectate", authReq, lobby.Spectate)
 
 	// --- Драфт (этап пиков) ---
 	draft := handlers.NewDraftHandler(database, cfg, hub)
@@ -81,15 +83,18 @@ func main() {
 	app.Post("/lobby/:id/finish", authReq, bracket.Finish)
 
 	// --- Админ-панель (отдельный вход по ADMIN_PASSWORD) ---
-	admin := handlers.NewAdminHandler(database, cfg)
+	admin := handlers.NewAdminHandler(database, cfg, hub)
 	adminReq := middleware.RequireAdmin(cfg.JWTSecret)
 	app.Post("/admin/login", admin.Login)
 	app.Post("/admin/logout", admin.Logout)
+	app.Get("/admin/me", adminReq, admin.Me)
 	app.Get("/admin/users", adminReq, admin.ListUsers)
 	app.Post("/admin/create-user", adminReq, admin.CreateUser)
 	app.Post("/admin/users/:id/reset-password", adminReq, admin.ResetPassword)
 	app.Post("/admin/users/:id/block", adminReq, admin.SetBlocked)
 	app.Delete("/admin/users/:id", adminReq, admin.DeleteUser)
+	app.Get("/admin/lobbies", adminReq, admin.ListLobbies)
+	app.Delete("/admin/lobbies/:id", adminReq, admin.DeleteLobby)
 
 	// --- WebSocket: real-time обновления лобби ---
 	app.Use("/ws", func(c *fiber.Ctx) error {
