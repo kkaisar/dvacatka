@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Настройки — Dvacatka</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js"></script>
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="max-w-md mx-auto px-4 py-7">
+    <h2 class="text-xl font-bold mb-4">Настройки профиля</h2>
+    <div id="msg" class="hidden mb-4"></div>
+    <form id="form" class="space-y-3 card card--pad">
+      <div><label class="label">Никнейм</label><input name="nickname" required class="input" /></div>
+      <div><label class="label">Имя</label><input name="real_name" class="input" /></div>
+      <div><label class="label">Категория</label>
+        <select name="category" required class="select">
+          <option value="A">A</option><option value="B">B</option>
+          <option value="C">C</option><option value="Captain">Captain</option>
+        </select>
+      </div>
+      <button class="btn btn--primary btn--block">Сохранить</button>
+    </form>
+    <p class="muted text-xs mt-3">Телефон и email менять нельзя — обратитесь к администратору.</p>
+  </main>
+
+  <script>
+    function showMsg(text, ok) {
+      const m = document.getElementById("msg");
+      m.className = "mb-4 alert " + (ok ? "alert--success" : "alert--error");
+      m.textContent = text; m.classList.remove("hidden");
+    }
+    async function load() {
+      const me = await requireAuth();
+      document.getElementById("nav").innerHTML = navBar(me);
+      const f = document.getElementById("form");
+      f.nickname.value = me.nickname || "";
+      f.real_name.value = me.real_name || "";
+      f.category.value = me.category || "A";
+      f.onsubmit = async (e) => {
+        e.preventDefault();
+        const o = {}; new FormData(f).forEach((v, k) => o[k] = v);
+        try { await api("PUT", "/profile/settings", o); showMsg("Сохранено ✓", true); }
+        catch (err) { showMsg(err.message, false); }
+      };
+    }
+    load();
+  </script>
+</body>
+</html>

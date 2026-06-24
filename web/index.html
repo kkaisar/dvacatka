@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dvacatka — Главное меню</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js"></script>
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="max-w-4xl mx-auto px-4 py-7">
+
+    <h2 class="text-xl font-bold mb-4">Создать турнир</h2>
+    <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-10">
+      <button onclick="openCreate('dvacatka')" class="card card--hover card--pad text-left">
+        <div class="text-2xl mb-1">🔫</div>
+        <div class="text-xl font-bold">Двацатка</div>
+        <div class="muted text-sm">20 игроков · 4 команды</div>
+      </button>
+      <button onclick="openCreate('tricatka')" class="card card--hover card--pad text-left">
+        <div class="text-2xl mb-1">💣</div>
+        <div class="text-xl font-bold">Трицатка</div>
+        <div class="muted text-sm">30 игроков · 6 команд</div>
+      </button>
+      <button onclick="openCreate('sorokovka')" class="card card--hover card--pad text-left">
+        <div class="text-2xl mb-1">🏆</div>
+        <div class="text-xl font-bold">Сороковка</div>
+        <div class="muted text-sm">40 игроков · 8 команд</div>
+      </button>
+    </div>
+
+    <h2 class="text-xl font-bold mb-4">Активные лобби</h2>
+    <div id="active" class="space-y-3 mb-10"><p class="muted text-sm">Загрузка…</p></div>
+
+    <h2 class="text-xl font-bold mb-4">История игр</h2>
+    <div id="history" class="space-y-3"><p class="muted text-sm">Загрузка…</p></div>
+  </main>
+
+  <div id="modal" class="hidden modal-backdrop">
+    <div class="card card--pad w-full max-w-md">
+      <h3 id="modal-title" class="text-lg font-bold mb-4"></h3>
+      <div id="modal-err" class="hidden alert alert--error mb-3"></div>
+      <form id="form-create" class="space-y-3">
+        <input name="name" placeholder="Название лобби" required class="input" />
+        <input name="password" placeholder="Пароль (необязательно)" class="input" />
+        <input name="payment_phone" placeholder="Телефон для оплаты" class="input" />
+        <input name="payment_card" placeholder="Номер карты для оплаты" class="input" />
+        <div class="flex gap-2 pt-1">
+          <button type="button" onclick="closeCreate()" class="btn btn--ghost btn--block">Отмена</button>
+          <button class="btn btn--primary btn--block">Создать</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    let createType = null;
+    function openCreate(type) {
+      createType = type;
+      document.getElementById("modal-title").textContent = "Создать: " + LOBBY_TYPES[type].label;
+      document.getElementById("modal-err").classList.add("hidden");
+      document.getElementById("form-create").reset();
+      document.getElementById("modal").classList.remove("hidden");
+    }
+    function closeCreate() { document.getElementById("modal").classList.add("hidden"); }
+
+    document.getElementById("form-create").onsubmit = async (e) => {
+      e.preventDefault();
+      const o = { type: createType };
+      new FormData(e.target).forEach((v, k) => o[k] = v);
+      try {
+        const lobby = await api("POST", "/lobby/create", o);
+        location.href = "/lobby.html?id=" + lobby.id;
+      } catch (err) {
+        const el = document.getElementById("modal-err");
+        el.textContent = err.message; el.classList.remove("hidden");
+      }
+    };
+
+    function lobbyCard(l) {
+      const t = LOBBY_TYPES[l.type] || { label: l.type };
+      const lock = l.has_password ? "🔒 " : "";
+      const winner = l.winner_team_id ? ` · 🏆 Команда ${l.winner_team_id}` : "";
+      const pct = Math.round((l.players_count / l.max_players) * 100);
+      return `<a href="/lobby.html?id=${l.id}" class="block card card--hover px-5 py-4">
+        <div class="flex items-center justify-between gap-3">
+          <div class="min-w-0">
+            <div class="font-semibold truncate">${lock}${esc(l.name)}</div>
+            <div class="muted text-sm">${t.label} · ${l.players_count}/${l.max_players} игроков${winner}</div>
+          </div>
+          ${statusBadge(l.status)}
+        </div>
+        <div style="height:4px;background:var(--bg-soft);border-radius:99px;margin-top:12px;overflow:hidden">
+          <div style="height:100%;width:${pct}%;background:linear-gradient(90deg,var(--accent),var(--accent-600))"></div>
+        </div></a>`;
+    }
+
+    async function load() {
+      const me = await requireAuth();
+      document.getElementById("nav").innerHTML = navBar(me);
+      const data = await api("GET", "/api/lobbies");
+      document.getElementById("active").innerHTML = data.active.length
+        ? data.active.map(lobbyCard).join("")
+        : `<p class="muted text-sm">Нет активных лобби</p>`;
+      document.getElementById("history").innerHTML = data.history.length
+        ? data.history.map(lobbyCard).join("")
+        : `<p class="muted text-sm">Пока нет завершённых турниров</p>`;
+    }
+    load();
+  </script>
+</body>
+</html>

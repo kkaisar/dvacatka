@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Вход — Dvacatka</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md card card--pad">
+    <div class="text-center mb-6">
+      <div class="text-3xl font-extrabold tracking-tight">🎮 Dva<span style="color:var(--accent)">·</span>catka</div>
+      <p class="muted text-sm mt-1">Турниры по CS среди своих</p>
+    </div>
+
+    <div class="tabs mb-6">
+      <button id="tab-login" class="tab tab--active" onclick="showTab('login')">Вход</button>
+      <button id="tab-register" class="tab" onclick="showTab('register')">Регистрация</button>
+    </div>
+
+    <div id="err" class="hidden alert alert--error mb-4"></div>
+
+    <form id="form-login" class="space-y-3">
+      <input name="login" placeholder="Телефон или email" required class="input" />
+      <input name="password" type="password" placeholder="Пароль" required class="input" />
+      <button class="btn btn--primary btn--block">Войти</button>
+      <button type="button" onclick="forgotPassword()" class="btn btn--block" style="background:none;color:var(--muted)">Забыли пароль?</button>
+    </form>
+
+    <form id="form-register" class="space-y-3 hidden">
+      <input name="phone" placeholder="Телефон" required class="input" />
+      <input name="email" type="email" placeholder="Email" required class="input" />
+      <input name="nickname" placeholder="Никнейм" required class="input" />
+      <input name="real_name" placeholder="Имя" class="input" />
+      <select name="category" required class="select">
+        <option value="">Категория…</option>
+        <option value="A">A</option><option value="B">B</option>
+        <option value="C">C</option><option value="Captain">Captain</option>
+      </select>
+      <input name="password" type="password" placeholder="Пароль (мин. 6)" required class="input" />
+      <input name="password_confirm" type="password" placeholder="Повтор пароля" required class="input" />
+      <button class="btn btn--primary btn--block">Зарегистрироваться</button>
+    </form>
+  </div>
+
+  <script>
+    function showTab(t) {
+      document.getElementById("err").classList.add("hidden");
+      const login = t === "login";
+      document.getElementById("form-login").classList.toggle("hidden", !login);
+      document.getElementById("form-register").classList.toggle("hidden", login);
+      document.getElementById("tab-login").className = "tab" + (login ? " tab--active" : "");
+      document.getElementById("tab-register").className = "tab" + (!login ? " tab--active" : "");
+    }
+    function showErr(msg) {
+      const e = document.getElementById("err");
+      e.className = "alert alert--error mb-4";
+      e.textContent = msg; e.classList.remove("hidden");
+    }
+    function formData(f) { const o = {}; new FormData(f).forEach((v, k) => o[k] = v); return o; }
+
+    async function forgotPassword() {
+      const email = prompt("Введите email для восстановления:");
+      if (!email) return;
+      try {
+        const r = await api("POST", "/auth/forgot-password", { email });
+        const e = document.getElementById("err");
+        e.className = "alert alert--success mb-4"; e.textContent = r.message; e.classList.remove("hidden");
+      } catch (err) { showErr(err.message); }
+    }
+    document.getElementById("form-login").onsubmit = async (e) => {
+      e.preventDefault();
+      try { await api("POST", "/auth/login", formData(e.target)); location.href = "/"; }
+      catch (err) { showErr(err.message); }
+    };
+    document.getElementById("form-register").onsubmit = async (e) => {
+      e.preventDefault();
+      const d = formData(e.target);
+      if (d.password !== d.password_confirm) return showErr("Пароли не совпадают");
+      try { await api("POST", "/auth/register", d); location.href = "/"; }
+      catch (err) { showErr(err.message); }
+    };
+  </script>
+</body>
+</html>

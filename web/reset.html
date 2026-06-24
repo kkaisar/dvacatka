@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Сброс пароля — Dvacatka</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js"></script>
+</head>
+<body class="min-h-screen flex items-center justify-center p-4">
+  <div class="w-full max-w-md card card--pad">
+    <h1 class="text-xl font-bold mb-4">Новый пароль</h1>
+    <div id="msg" class="hidden mb-4"></div>
+    <form id="form" class="space-y-3">
+      <input name="password" type="password" placeholder="Новый пароль (мин. 6)" required class="input" />
+      <input name="password2" type="password" placeholder="Повтор пароля" required class="input" />
+      <button class="btn btn--primary btn--block">Сменить пароль</button>
+    </form>
+    <a href="/login.html" class="block text-center muted text-sm mt-4 hover:underline">← Ко входу</a>
+  </div>
+
+  <script>
+    function showMsg(text, ok) {
+      const m = document.getElementById("msg");
+      m.className = "mb-4 alert " + (ok ? "alert--success" : "alert--error");
+      m.textContent = text; m.classList.remove("hidden");
+    }
+    const token = qs("token");
+    if (!token) showMsg("Нет токена в ссылке", false);
+    document.getElementById("form").onsubmit = async (e) => {
+      e.preventDefault();
+      const f = e.target;
+      if (f.password.value !== f.password2.value) return showMsg("Пароли не совпадают", false);
+      try {
+        await api("POST", "/auth/reset-password", { token, password: f.password.value });
+        showMsg("Пароль изменён! Сейчас перейдём ко входу…", true);
+        setTimeout(() => location.href = "/login.html", 1500);
+      } catch (err) { showMsg(err.message, false); }
+    };
+  </script>
+</body>
+</html>

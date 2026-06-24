@@ -1,0 +1,123 @@
+/* ===== Dvacatka — дизайн-система (тёмная киберспортивная тема) ===== */
+:root {
+  --bg: #0b0f1a;
+  --bg-soft: #111726;
+  --surface: #161d2e;
+  --surface-2: #1d2740;
+  --border: #273150;
+  --text: #e8edf7;
+  --muted: #93a0bd;
+  --accent: #f5a623;        /* CS gold */
+  --accent-600: #e0930f;
+  --accent-glow: rgba(245, 166, 35, .25);
+  --green: #34d399;
+  --red: #f87171;
+  --blue: #60a5fa;
+  --radius: 16px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: 'Segoe UI', Roboto, system-ui, -apple-system, sans-serif;
+  color: var(--text);
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(245,166,35,.08), transparent 60%),
+    radial-gradient(900px 500px at -10% 10%, rgba(96,165,250,.06), transparent 55%),
+    var(--bg);
+  min-height: 100vh;
+}
+
+a { color: inherit; text-decoration: none; }
+
+/* ---- Навигация ---- */
+.nav {
+  background: rgba(11, 15, 26, .8);
+  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--border);
+  position: sticky; top: 0; z-index: 40;
+}
+.nav__inner { max-width: 64rem; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; justify-content: space-between; }
+.nav__brand { font-weight: 800; font-size: 1.15rem; letter-spacing: .3px; }
+.nav__brand .dot { color: var(--accent); }
+.nav__links { display: flex; align-items: center; gap: 18px; font-size: .9rem; }
+.nav__user { color: var(--muted); }
+.nav__links a:hover, .nav__btn:hover { color: var(--accent); }
+.nav__btn { background: none; border: 0; color: var(--text); cursor: pointer; font: inherit; }
+
+/* ---- Карточки ---- */
+.card {
+  background: linear-gradient(180deg, var(--surface), var(--bg-soft));
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 10px 30px -12px rgba(0,0,0,.5);
+}
+.card--pad { padding: 22px; }
+.card--hover { transition: transform .15s ease, border-color .15s ease, box-shadow .15s ease; }
+.card--hover:hover { transform: translateY(-2px); border-color: var(--accent); box-shadow: 0 16px 40px -14px var(--accent-glow); }
+
+/* ---- Кнопки ---- */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 18px; border-radius: 12px; font-weight: 600; font-size: .92rem;
+  border: 1px solid transparent; cursor: pointer; transition: all .15s ease;
+  font-family: inherit; line-height: 1; white-space: nowrap;
+}
+.btn:disabled { opacity: .45; cursor: not-allowed; }
+.btn--block { width: 100%; }
+.btn--sm { padding: 6px 12px; font-size: .8rem; border-radius: 9px; }
+.btn--primary { background: linear-gradient(180deg, var(--accent), var(--accent-600)); color: #1a1206; box-shadow: 0 6px 18px -6px var(--accent-glow); }
+.btn--primary:hover:not(:disabled) { filter: brightness(1.07); }
+.btn--success { background: linear-gradient(180deg, #34d399, #10b981); color: #052e22; }
+.btn--success:hover:not(:disabled) { filter: brightness(1.07); }
+.btn--ghost { background: var(--surface-2); color: var(--text); border-color: var(--border); }
+.btn--ghost:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
+.btn--danger { background: transparent; color: var(--red); border-color: rgba(248,113,113,.35); }
+.btn--danger:hover:not(:disabled) { background: rgba(248,113,113,.12); }
+.btn--warn { background: transparent; color: var(--accent); border-color: rgba(245,166,35,.4); }
+.btn--warn:hover:not(:disabled) { background: rgba(245,166,35,.12); }
+
+/* ---- Поля ввода ---- */
+.input, .select {
+  width: 100%; padding: 11px 14px; border-radius: 12px;
+  background: var(--bg-soft); border: 1px solid var(--border); color: var(--text);
+  font: inherit; outline: none; transition: border-color .15s, box-shadow .15s;
+}
+.input::placeholder { color: var(--muted); }
+.input:focus, .select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-glow); }
+.label { display: block; font-size: .8rem; color: var(--muted); margin: 2px 0; }
+
+/* ---- Бейджи ---- */
+.badge { display: inline-flex; align-items: center; font-size: .72rem; font-weight: 600; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border); }
+.badge--open { background: rgba(52,211,153,.12); color: var(--green); border-color: rgba(52,211,153,.3); }
+.badge--draft { background: rgba(245,166,35,.12); color: var(--accent); border-color: rgba(245,166,35,.3); }
+.badge--active { background: rgba(96,165,250,.12); color: var(--blue); border-color: rgba(96,165,250,.3); }
+.badge--finished { background: rgba(147,160,189,.12); color: var(--muted); }
+.cat { font-size: .68rem; font-weight: 700; padding: 2px 7px; border-radius: 6px; background: var(--surface-2); color: var(--accent); border: 1px solid var(--border); }
+
+/* ---- Алерты ---- */
+.alert { font-size: .88rem; border-radius: 12px; padding: 10px 14px; }
+.alert--error { background: rgba(248,113,113,.1); color: var(--red); border: 1px solid rgba(248,113,113,.25); }
+.alert--success { background: rgba(52,211,153,.1); color: var(--green); border: 1px solid rgba(52,211,153,.25); }
+.alert--info { background: rgba(96,165,250,.1); color: var(--blue); border: 1px solid rgba(96,165,250,.25); }
+.alert--warn { background: rgba(245,166,35,.1); color: var(--accent); border: 1px solid rgba(245,166,35,.25); }
+
+/* ---- Модалка ---- */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(4,7,15,.7); backdrop-filter: blur(4px); display: flex; align-items: center; justify-content: center; padding: 16px; z-index: 50; }
+
+/* ---- Таблица ---- */
+.table { width: 100%; border-collapse: collapse; font-size: .88rem; }
+.table thead { color: var(--muted); text-align: left; }
+.table th, .table td { padding: 12px 14px; }
+.table tbody tr { border-top: 1px solid var(--border); }
+.table tbody tr:hover { background: rgba(255,255,255,.02); }
+
+/* ---- Divider list ---- */
+.row { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); }
+.row:last-child { border-bottom: 0; }
+
+.muted { color: var(--muted); }
+.tabs { display: flex; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
+.tab { flex: 1; padding: 9px; border-radius: 9px; font-weight: 600; font-size: .9rem; border: 0; background: none; color: var(--muted); cursor: pointer; transition: all .15s; }
+.tab--active { background: var(--surface-2); color: var(--text); box-shadow: 0 2px 8px -3px rgba(0,0,0,.4); }

@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Игрок — Dvacatka</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js"></script>
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="max-w-2xl mx-auto px-4 py-7">
+    <a href="javascript:history.back()" class="muted text-sm hover:underline">← Назад</a>
+    <div id="card" class="mt-3"></div>
+    <h3 class="text-lg font-bold mt-7 mb-3">История игр</h3>
+    <div id="history" class="space-y-3"></div>
+  </main>
+
+  <script>
+    async function load() {
+      const me = await requireAuth();
+      document.getElementById("nav").innerHTML = navBar(me);
+      const id = qs("id");
+      let p;
+      try { p = await api("GET", "/player/" + id); }
+      catch (err) { document.getElementById("card").innerHTML = `<div class="alert alert--error">${esc(err.message)}</div>`; return; }
+      const initials = (p.nickname || "?").slice(0, 2).toUpperCase();
+      document.getElementById("card").innerHTML = `
+        <div class="card card--pad flex items-center gap-5">
+          <div style="width:72px;height:72px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:1.6rem;font-weight:800;background:linear-gradient(180deg,var(--accent),var(--accent-600));color:#1a1206">${esc(initials)}</div>
+          <div>
+            <div class="text-2xl font-bold">${esc(p.nickname)}</div>
+            <div class="muted">${esc(p.real_name || "")}</div>
+            <div class="mt-2 flex gap-2 text-sm items-center">
+              <span class="cat">${esc(p.category)}</span>
+              <span class="muted">📞 ${esc(p.phone)}</span>
+            </div>
+          </div>
+        </div>`;
+      const h = p.game_history || [];
+      document.getElementById("history").innerHTML = h.length
+        ? h.map(g => `<a href="/lobby.html?id=${g.lobby_id}" class="block card card--hover px-5 py-4">
+            <div class="flex justify-between items-center"><span class="font-medium">${esc(g.name)}</span>${statusBadge(g.status)}</div></a>`).join("")
+        : `<p class="muted text-sm">Пока нет сыгранных турниров</p>`;
+    }
+    load();
+  </script>
+</body>
+</html>

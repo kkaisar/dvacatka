@@ -1,0 +1,9 @@
+.env
+.git
+*.exe
+/tmp
+scripts/
+wstest/
+*_test.go
+ROADMAP.md
+DEPLOY.md
