@@ -54,7 +54,10 @@
       document.getElementById("head").innerHTML = `
         <div class="card card--pad">
           <div class="flex items-center justify-between gap-3">
-            <h1 class="text-2xl font-extrabold">${lobby.has_password ? "🔒 " : ""}${esc(lobby.name)}</h1>
+            <h1 class="text-2xl font-extrabold flex items-center gap-2">
+              ${lobby.has_password ? "🔒 " : ""}${esc(lobby.name)}
+              ${isManager() ? `<button onclick="renameLobby()" title="Переименовать" class="btn btn--ghost btn--sm">✏️</button>` : ""}
+            </h1>
             ${statusBadge(lobby.status)}
           </div>
           <div class="muted text-sm mt-1">${t.label} · ${lobby.players_count}/${lobby.max_players} игроков · ${lobby.team_count} команд</div>
@@ -125,6 +128,11 @@
       let pw;
       if (lobby.has_password) { pw = prompt("Пароль лобби:"); if (pw === null) return; }
       await act("POST", "/lobby/" + LID + "/join", { password: pw || "" });
+    }
+    async function renameLobby() {
+      const name = prompt("Новое название лобби:", lobby.name);
+      if (name === null) return;
+      await act("POST", `/lobby/${LID}/rename`, { name });
     }
     async function setTier(uid, cat) {
       await act("POST", `/lobby/${LID}/set-tier/${uid}`, { category: cat });

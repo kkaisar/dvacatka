@@ -425,6 +425,40 @@ func (h *LobbyHandler) SetTier(c *fiber.Ctx) error {
 	return c.JSON(fiber.Map{"ok": true, "category": req.Category})
 }
 
+type renameReq struct {
+	Name string `json:"name"`
+}
+
+// Rename — POST /lobby/:id/rename. Создатель (или админ) меняет название лобби.
+func (h *LobbyHandler) Rename(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
+	l, err := h.findLobby(ctx, c.Params("id"))
+	if err != nil {
+		if errors.Is(err, errBadID) {
+			return fiber.NewError(fiber.StatusBadRequest, "неверный id лобби")
+		}
+		return fiber.NewError(fiber.StatusNotFound, "лобби не найдено")
+	}
+	if !h.canManage(c, l) {
+		return fiber.NewError(fiber.StatusForbidden, "переименовать может только создатель или админ")
+	}
+	var req renameReq
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "неверный формат запроса")
+	}
+	name := strings.TrimSpace(req.Name)
+	if name == "" {
+		return fiber.NewError(fiber.StatusBadRequest, "название не может быть пустым")
+	}
+	if _, err := h.lobbies().UpdateByID(ctx, l.ID, bson.M{"$set": bson.M{"name": name}}); err != nil {
+		return fiber.NewError(fiber.StatusInternalServerError, "не удалось переименовать")
+	}
+	h.broadcast(ctx, l.ID.Hex())
+	return c.JSON(fiber.Map{"ok": true, "name": name})
+}
+
 // Spectate — POST /lobby/:id/spectate. Создатель выходит из списка игроков и просто следит.
 func (h *LobbyHandler) Spectate(c *fiber.Ctx) error {
 	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
