@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Лобби — Dvacatka</title>
   <script src="https://cdn.tailwindcss.com"></script>
-  <link rel="stylesheet" href="/static/style.css?v=2" />
-  <script src="/static/app.js?v=2"></script>
+  <link rel="stylesheet" href="/static/style.css?v=3" />
+  <script src="/static/app.js?v=3"></script>
 </head>
 <body>
   <div id="nav"></div>
@@ -226,32 +226,77 @@
       const t = (lobby.teams || []).find(t => t.id === id);
       return t ? t.name : (id ? "Команда " + id : "—");
     }
+    function roundTitle(r, last) {
+      const d = last - r;
+      if (d === 1) return "Полуфинал";
+      if (d === 2) return "Четвертьфинал";
+      return "Раунд " + (r + 1);
+    }
+    // Колонка раунда (side = "left" | "right").
+    function roundCol(r, last, matches, side) {
+      if (!matches.length) return "";
+      return `<div class="br-round br-round--${side}">
+        <div class="br-round__title">${roundTitle(r, last)}</div>
+        <div class="br-matches">${matches.map(m => matchCard(m)).join("")}</div>
+      </div>`;
+    }
+    // Зеркальная сетка: левая половина → центр (финалисты + кубок) ← правая половина.
     function renderActive() {
       const b = lobby.bracket || { rounds: [] };
+      if (!b.rounds.length) return `<div class="muted mt-4">Сетка ещё не сформирована</div>`;
       const last = b.rounds.length - 1;
-      const rounds = b.rounds.map((r, ri) => {
-        const title = ri === last ? "Финал" : (b.rounds.length === 2 ? "Полуфинал" : "Раунд " + (ri + 1));
-        const matches = r.matches.map(m => matchCard(m, ri === last)).join("");
-        return `<div class="br-round ${ri === last ? "br-final" : ""}">
-          <div class="br-round__title">${title}</div>
-          <div class="br-matches">${matches}</div>
-        </div>`;
-      }).join("");
-
       const champ = bracketChampion(b);
-      const champCol = `<div class="br-champion">
-        <div class="br-trophy">🏆</div>
-        <div class="br-champ-name">${champ ? esc(teamName(champ)) : "—"}</div>
-        <div class="br-champ-sub">${champ ? "Чемпион" : "идёт турнир"}</div>
+
+      // Левая половина: рауноды 0..last-1, первая половина матчей (слева направо).
+      let left = "";
+      for (let r = 0; r < last; r++) {
+        const half = b.rounds[r].matches.length / 2;
+        left += roundCol(r, last, b.rounds[r].matches.slice(0, half), "left");
+      }
+      // Правая половина: от центра наружу — полуфинал, затем ранние раунды.
+      let right = "";
+      for (let r = last - 1; r >= 0; r--) {
+        const half = b.rounds[r].matches.length / 2;
+        right += roundCol(r, last, b.rounds[r].matches.slice(half), "right");
+      }
+
+      // Центр: финалист | кубок | финалист.
+      const fm = b.rounds[last].matches[0];
+      const finalist = (id, score) => {
+        if (id == null) return `<div class="bm-finalist bm-finalist--tbd"><div class="bm-fin-name">— финалист —</div></div>`;
+        const win = champ === id;
+        return `<div class="bm-finalist ${win ? "bm-finalist--win" : ""}">
+          <div class="bm-fin-name">${esc(teamName(id))}${win ? " 🏆" : ""}</div>
+          <div class="bm-fin-score">${score}</div></div>`;
+      };
+      const finalReady = fm.team1 != null && fm.team2 != null;
+      let finalBo3 = "";
+      if (isManager() && finalReady && !fm.winner) {
+        const btn = (a, bb) => `<button onclick="submitScore(${fm.id},${a},${bb})" class="btn btn--ghost btn--sm">${a}:${bb}</button>`;
+        finalBo3 = `<div class="br-bo3" style="border:0;padding:8px 0 0">${btn(2,0)}${btn(2,1)}${btn(1,2)}${btn(0,2)}</div>`;
+      }
+      const center = `<div class="bm-center">
+        ${finalist(fm.team1, fm.score1)}
+        <div class="bm-trophy-wrap">
+          <div class="br-trophy">🏆</div>
+          <div class="br-champ-name">${champ ? esc(teamName(champ)) : "Финал"}</div>
+          <div class="br-champ-sub">${champ ? "Чемпион" : "BO3"}</div>
+          ${finalBo3}
+        </div>
+        ${finalist(fm.team2, fm.score2)}
       </div>`;
 
       let finishBtn = "";
       if (isManager() && champ && lobby.status === "active") {
-        finishBtn = `<div><button onclick="act('POST','/lobby/${LID}/finish')" class="btn btn--primary mt-4">🏆 Объявить победителя</button></div>`;
+        finishBtn = `<div class="text-center"><button onclick="act('POST','/lobby/${LID}/finish')" class="btn btn--primary mt-4">🏆 Объявить победителя</button></div>`;
       }
 
       return `<div class="mt-4">
-        <div class="bracket">${rounds}${champCol}</div>
+        <div class="bracket-mirror">
+          <div class="bm-side bm-left">${left}</div>
+          ${center}
+          <div class="bm-side bm-right">${right}</div>
+        </div>
         ${finishBtn}
       </div>`;
     }
