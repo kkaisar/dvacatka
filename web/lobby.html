@@ -106,20 +106,29 @@
         </div>`;
       }).join("");
 
+      // Считаем капитанов (тир Captain) — их нужно столько же, сколько команд.
+      const captains = lobby.players.filter(p => catOf(p.user_id) === "Captain").length;
+      const enoughCaps = captains >= lobby.team_count;
+
       let controls = "";
       if (!inLobby && !full) controls += `<button onclick="joinLobby()" class="btn btn--primary">${creatorIsSpectator() && isCreator() ? "Войти как игрок" : "Войти в лобби"}</button>`;
       if (inLobby && !isCreator()) controls += `<button onclick="act('POST','/lobby/${LID}/leave')" class="btn btn--ghost">Выйти</button>`;
       // Создатель может стать зрителем (выйти из игроков, но продолжить вести лобби).
       if (isCreator() && inLobby) controls += `<button onclick="act('POST','/lobby/${LID}/spectate')" class="btn btn--ghost" title="Не играть, только следить">Стать зрителем 👁</button>`;
       if (isManager()) {
-        controls += `<button onclick="act('POST','/lobby/${LID}/start-draft')" ${full ? "" : "disabled"} class="btn btn--success">Начать драфт${full ? "" : ` (${lobby.players_count}/${lobby.max_players})`}</button>`;
+        let label = "Начать драфт";
+        if (!full) label += ` (${lobby.players_count}/${lobby.max_players})`;
+        else if (!enoughCaps) label += ` (капитанов ${captains}/${lobby.team_count})`;
+        controls += `<button onclick="act('POST','/lobby/${LID}/start-draft')" ${full && enoughCaps ? "" : "disabled"} class="btn btn--success">${label}</button>`;
         controls += `<button onclick="if(confirm('Удалить лобби?'))act('DELETE','/lobby/${LID}')" class="btn btn--danger">Удалить лобби</button>`;
       }
-      const specNote = creatorIsSpectator() ? `<p class="muted text-sm mt-2">👁 Создатель — зритель (не играет).</p>` : "";
+      const capNote = `<p class="muted text-sm mt-2">👑 Капитанов: <b style="color:${enoughCaps ? 'var(--green)' : 'var(--accent)'}">${captains}</b> / ${lobby.team_count} нужно${enoughCaps ? "" : " — назначьте тир Captain нужным игрокам"}</p>`;
+      const specNote = creatorIsSpectator() ? `<p class="muted text-sm">👁 Создатель — зритель (не играет).</p>` : "";
 
       return `<div class="card card--pad mt-4">
         <h2 class="font-bold mb-2">Игроки (${lobby.players_count}/${lobby.max_players})</h2>
         ${rows || '<p class="muted text-sm">Пока никого</p>'}
+        ${capNote}
         ${specNote}
         <div class="flex flex-wrap gap-2 mt-5">${controls}</div>
       </div>`;
@@ -169,21 +178,43 @@
         </div>`;
       }).join("");
 
+      // Краткая инструкция (сворачиваемая).
+      const help = `<details class="card mb-4" style="padding:14px 18px">
+        <summary style="cursor:pointer;font-weight:700">❓ Как идёт драфт</summary>
+        <ol class="muted text-sm mt-3" style="line-height:1.8;padding-left:18px">
+          <li>Капитаны (тир <b>Captain</b>) занимают команды кнопкой <b>«Стать капитаном»</b>.</li>
+          <li>Когда у всех команд есть капитан — жеребьёвка задаёт <b>порядок пиков</b>.</li>
+          <li>Капитаны <b>по очереди</b> выбирают игроков кнопкой <b>«Добавить»</b> из списка ниже.</li>
+          <li>Кнопка «Добавить» активна <b>только у того, чья сейчас очередь</b>.</li>
+          <li>Когда все команды набрали по ${s.slots_per_team} игроков — драфт завершён, создатель жмёт «Сформировать сетку».</li>
+        </ol></details>`;
+
       let banner = "";
-      if (!s.picking) banner = `<div class="alert alert--warn mb-4">Капитаны (категория Captain) занимают слоты. Осталось команд без капитана: ${s.teams.filter(t => !t.captain_id).length}</div>`;
+      if (!s.picking) banner = `<div class="alert alert--warn mb-4">Капитаны (тир Captain) занимают команды кнопкой «Стать капитаном». Осталось команд без капитана: ${s.teams.filter(t => !t.captain_id).length}</div>`;
       else if (s.complete) {
         banner = `<div class="alert alert--success mb-4">Драфт завершён! ${isManager() ? "" : "Ожидайте формирования сетки."}</div>`;
         if (isManager()) banner += `<button onclick="act('POST','/lobby/${LID}/generate-bracket')" class="btn btn--success mb-4">Сформировать сетку</button>`;
+      } else if (meIsCurrent) {
+        banner = `<div class="mb-4" style="background:linear-gradient(135deg,var(--accent),var(--accent-600));color:#1a1206;border-radius:14px;padding:16px 18px;font-weight:800;font-size:1.1rem">🎯 ВАШ ХОД! Выберите игрока кнопкой «Добавить» в списке ниже.</div>`;
       } else {
         const curName = s.current_captain ? nick(s.current_captain) : "—";
-        banner = `<div class="alert alert--info mb-4">Сейчас пикает: <b>${esc(curName)}</b>${meIsCurrent ? " — ваш ход!" : ""}</div>`;
+        banner = `<div class="alert alert--info mb-4" style="font-size:1.02rem">⏳ Сейчас пикает: <b>${esc(curName)}</b> (команда ${s.current_team}). Ждите свою очередь.</div>`;
+      }
+      // Строка порядка пиков с подсветкой текущего.
+      let orderStrip = "";
+      if (s.picking && !s.complete && s.order && s.order.length) {
+        orderStrip = `<div class="muted text-sm mb-4">Очередь: ` + s.order.map(tid => {
+          const t = s.teams.find(x => x.id === tid);
+          const label = t ? esc(t.name) : ("Команда " + tid);
+          return tid === s.current_team ? `<b style="color:var(--accent)">▶ ${label}</b>` : label;
+        }).join(" → ") + `</div>`;
       }
       if (isManager() && s.can_undo) {
         banner += `<button onclick="act('POST','/lobby/${LID}/undo-pick')" class="btn btn--warn btn--sm mb-4">↩ Отменить последний пик</button>`;
       }
 
       return `<div class="mt-4">
-        ${banner}
+        ${help}${banner}${orderStrip}
         <div class="grid grid-cols-2 md:grid-cols-${Math.min(s.teams.length, 4)} gap-3 mb-6">${cols}</div>
         ${s.picking && !s.complete ? `<div class="card card--pad">
           <h3 class="font-bold mb-2">Доступные игроки (${s.available.length})</h3>${avail || '<p class="muted text-sm">Все разобраны</p>'}</div>` : ""}

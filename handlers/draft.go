@@ -87,6 +87,16 @@ func (h *DraftHandler) StartDraft(c *fiber.Ctx) error {
 	if len(l.Players) != l.MaxPlayers {
 		return fiber.NewError(fiber.StatusConflict, fmt.Sprintf("нужно %d игроков, сейчас %d", l.MaxPlayers, len(l.Players)))
 	}
+	// Нужно ровно столько капитанов (тир Captain), сколько команд — иначе слоты не заполнить.
+	captains := 0
+	for _, p := range l.Players {
+		if p.Category == models.CategoryCaptain {
+			captains++
+		}
+	}
+	if captains < l.TeamCount {
+		return fiber.NewError(fiber.StatusConflict, fmt.Sprintf("нужно минимум %d капитанов (тир Captain), сейчас %d", l.TeamCount, captains))
+	}
 
 	// Создаём пустые команды.
 	teams := make([]models.Team, l.TeamCount)
@@ -130,13 +140,12 @@ func (h *DraftHandler) ClaimCaptain(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusForbidden, "вы не в этом лобби")
 	}
 
-	// Проверяем тир в рамках лобби (с запасом на глобальную категорию).
+	// Берём пользователя (нужен ник для названия команды) + тир в рамках лобби.
+	var u models.User
+	_ = h.DB.Collection("users").FindOne(ctx, bson.M{"_id": uid}).Decode(&u)
 	cat := lobbyCat(l, uid)
 	if cat == "" {
-		var u models.User
-		if h.DB.Collection("users").FindOne(ctx, bson.M{"_id": uid}).Decode(&u) == nil {
-			cat = u.Category
-		}
+		cat = u.Category
 	}
 	if cat != models.CategoryCaptain {
 		return fiber.NewError(fiber.StatusForbidden, "только игрок категории Captain может стать капитаном")
@@ -159,6 +168,9 @@ func (h *DraftHandler) ClaimCaptain(c *fiber.Ctx) error {
 	}
 
 	l.Teams[idx].CaptainID = uid
+	if u.Nickname != "" {
+		l.Teams[idx].Name = u.Nickname // команда называется ником капитана
+	}
 	l.Teams[idx].Slots = append(l.Teams[idx].Slots, models.TeamSlot{UserID: uid, Category: cat})
 
 	// Если все команды получили капитанов — жеребьёвка порядка пиков.
