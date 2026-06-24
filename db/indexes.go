@@ -24,9 +24,17 @@ func (d *DB) EnsureIndexes() error {
 	}
 
 	// TTL-индекс: токены сброса пароля удаляются автоматически по истечении.
-	_, err = d.Collection("reset_tokens").Indexes().CreateOne(ctx, mongo.IndexModel{
+	if _, err = d.Collection("reset_tokens").Indexes().CreateOne(ctx, mongo.IndexModel{
 		Keys:    bson.D{{Key: "expires_at", Value: 1}},
 		Options: options.Index().SetExpireAfterSeconds(0).SetName("ttl_expires"),
+	}); err != nil {
+		return err
+	}
+
+	// Статистика матчей: одна запись на (лобби, игрок); поиск по игроку для профиля.
+	_, err = d.Collection("match_stats").Indexes().CreateMany(ctx, []mongo.IndexModel{
+		{Keys: bson.D{{Key: "lobby_id", Value: 1}, {Key: "user_id", Value: 1}}, Options: options.Index().SetUnique(true).SetName("uniq_lobby_user")},
+		{Keys: bson.D{{Key: "user_id", Value: 1}}, Options: options.Index().SetName("by_user")},
 	})
 	return err
 }

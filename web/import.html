@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Импорт статистики — Dvacatka</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="/static/style.css" />
+  <script src="/static/app.js"></script>
+</head>
+<body>
+  <div id="nav"></div>
+  <main class="max-w-3xl mx-auto px-4 py-7">
+    <a href="/" class="muted text-sm hover:underline">← На главную</a>
+    <h1 class="text-2xl font-extrabold my-3">Импорт статистики матча</h1>
+
+    <div class="card card--pad mb-5">
+      <h2 class="font-bold mb-2">Шаг 1. Соберите статистику с CyberShoke</h2>
+      <p class="muted text-sm mb-3">Перетащите эту кнопку на панель закладок браузера (один раз). Затем откройте страницу матча на cybershoke.net и нажмите её — статистика скопируется в буфер.</p>
+      <p class="mb-3"><a id="bm" href="#" onclick="return false" class="btn btn--primary" style="cursor:grab">📊 Dvacatka: собрать стату</a></p>
+      <p class="muted text-xs">Не получается с закладкой? Скопируйте на странице матча таблицу с никами и K/D/A и вставьте текст ниже — разберём сами.</p>
+    </div>
+
+    <div class="card card--pad mb-5">
+      <h2 class="font-bold mb-2">Шаг 2. Вставьте данные</h2>
+      <textarea id="paste" rows="5" class="input" placeholder='Вставьте сюда (буфер из кнопки — это JSON; или просто текст с никами и 22/19/2)'></textarea>
+      <button onclick="parsePaste()" class="btn btn--primary mt-3">Разобрать</button>
+      <div id="perr" class="hidden alert alert--error mt-3"></div>
+    </div>
+
+    <div id="mapBox" class="card card--pad mb-5 hidden">
+      <h2 class="font-bold mb-2">Шаг 3. Лобби и сопоставление игроков</h2>
+      <label class="label">Турнир (лобби)</label>
+      <select id="lobbySel" class="select mb-4" onchange="loadLobbyPlayers()"></select>
+      <div id="mapRows"></div>
+      <button id="saveBtn" onclick="saveStats()" class="btn btn--success mt-4 hidden">Сохранить статистику</button>
+      <div id="serr" class="hidden alert alert--error mt-3"></div>
+      <div id="sok" class="hidden alert alert--success mt-3"></div>
+    </div>
+  </main>
+
+  <script>
+    // Код-закладка: парсит страницу CyberShoke по шаблону (ник + K/D/A) и копирует JSON.
+    const BOOKMARKLET = `javascript:(function(){var out=[],seen={};document.querySelectorAll('a[href*="/profile/"]').forEach(function(a){var name=a.textContent.trim();if(!name)return;var sid=(a.getAttribute('href').match(/profile\\/(\\d+)/)||[])[1]||name;if(seen[sid])return;var node=a,kda=null;for(var i=0;i<7&&node;i++){var m=node.textContent.match(/(\\d+)\\s*\\/\\s*(\\d+)\\s*\\/\\s*(\\d+)/);if(m){kda=m;break;}node=node.parentElement;}if(kda){seen[sid]=1;out.push({nickname:name,kills:+kda[1],deaths:+kda[2],assists:+kda[3]});}});if(!out.length){alert('Статистика не найдена');return;}var j=JSON.stringify(out);navigator.clipboard.writeText(j).then(function(){alert('Скопировано игроков: '+out.length+'. Вставьте в Dvacatka.');},function(){prompt('Скопируйте вручную:',j);});})();`;
+
+    let parsed = [];   // [{nickname,kills,deaths,assists}]
+    let players = [];  // игроки выбранного лобби [{user_id,nickname}]
+
+    function showErr(id, msg) { const e = document.getElementById(id); e.textContent = msg; e.classList.remove("hidden"); }
+    function hide(id) { document.getElementById(id).classList.add("hidden"); }
+
+    function parsePaste() {
+      hide("perr");
+      const txt = document.getElementById("paste").value.trim();
+      if (!txt) return showErr("perr", "Вставьте данные");
+      parsed = [];
+      // 1) пробуем JSON (из кнопки-закладки)
+      try {
+        const arr = JSON.parse(txt);
+        if (Array.isArray(arr)) parsed = arr.map(x => ({ nickname: String(x.nickname || "").trim(), kills: +x.kills || 0, deaths: +x.deaths || 0, assists: +x.assists || 0 })).filter(x => x.nickname);
+      } catch {}
+      // 2) иначе парсим текст: ник ... 22/19/2
+      if (!parsed.length) {
+        txt.split(/\n+/).forEach(line => {
+          const m = line.match(/(.+?)\s+(\d+)\s*\/\s*(\d+)\s*\/\s*(\d+)/);
+          if (m) parsed.push({ nickname: m[1].trim(), kills: +m[2], deaths: +m[3], assists: +m[4] });
+        });
+      }
+      if (!parsed.length) return showErr("perr", "Не удалось распознать. Нужны ник и K/D/A (например 22/19/2).");
+      document.getElementById("mapBox").classList.remove("hidden");
+      loadLobbyPlayers();
+    }
+
+    async function loadLobbies() {
+      const data = await api("GET", "/api/lobbies");
+      const all = [...data.active, ...data.history];
+      const pre = qs("lobby");
+      document.getElementById("lobbySel").innerHTML = all.map(l =>
+        `<option value="${l.id}" ${l.id === pre ? "selected" : ""}>${esc(l.name)} (${l.players_count} игроков)</option>`).join("")
+        || `<option value="">Нет лобби</option>`;
+    }
+
+    async function loadLobbyPlayers() {
+      const lid = document.getElementById("lobbySel").value;
+      if (!lid) return;
+      const l = await api("GET", "/lobby/" + lid);
+      const info = l.player_info || {};
+      players = l.players.map(p => ({ user_id: p.user_id, nickname: (info[p.user_id] || {}).nickname || p.user_id.slice(-6) }));
+      renderMap();
+    }
+
+    function renderMap() {
+      document.getElementById("mapRows").innerHTML = parsed.map((row, i) => {
+        const auto = players.find(p => p.nickname.toLowerCase() === row.nickname.toLowerCase());
+        const opts = `<option value="">— пропустить —</option>` + players.map(p =>
+          `<option value="${p.user_id}" ${auto && auto.user_id === p.user_id ? "selected" : ""}>${esc(p.nickname)}</option>`).join("");
+        return `<div class="row">
+          <div class="flex items-center gap-3">
+            <b>${esc(row.nickname)}</b>
+            <span class="muted text-sm">${row.kills}/${row.deaths}/${row.assists} (K/D/A)</span>
+          </div>
+          <select id="map_${i}" class="select" style="width:auto;min-width:160px">${opts}</select>
+        </div>`;
+      }).join("");
+      document.getElementById("saveBtn").classList.remove("hidden");
+    }
+
+    async function saveStats() {
+      hide("serr"); hide("sok");
+      const lid = document.getElementById("lobbySel").value;
+      const stats = [];
+      parsed.forEach((row, i) => {
+        const uid = document.getElementById("map_" + i).value;
+        if (uid) stats.push({ user_id: uid, kills: row.kills, deaths: row.deaths, assists: row.assists });
+      });
+      if (!stats.length) return showErr("serr", "Сопоставьте хотя бы одного игрока");
+      try {
+        const r = await api("POST", `/lobby/${lid}/stats`, { stats });
+        document.getElementById("sok").textContent = `Сохранено игроков: ${r.saved}. Статистика учтена в их профилях.`;
+        document.getElementById("sok").classList.remove("hidden");
+      } catch (e) { showErr("serr", e.message); }
+    }
+
+    async function init() {
+      const me = await requireAuth();
+      document.getElementById("nav").innerHTML = navBar(me);
+      document.getElementById("bm").setAttribute("href", BOOKMARKLET);
+      await loadLobbies();
+    }
+    init();
+  </script>
+</body>
+</html>

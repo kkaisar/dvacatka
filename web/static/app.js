@@ -71,6 +71,7 @@ function navBar(me) {
       <a href="/" class="nav__brand">🎮 Dva<span class="dot">·</span>catka</a>
       <nav class="nav__links">
         <span class="nav__user">${esc(me.nickname)} <span class="cat">${esc(me.category)}</span></span>
+        <a href="/import.html">Импорт статы</a>
         <a href="/settings.html">Настройки</a>
         <button class="nav__btn" onclick="logout()">Выход</button>
       </nav>
