@@ -58,7 +58,7 @@ func main() {
 	lobby := handlers.NewLobbyHandler(database, cfg, hub)
 	app.Get("/api/lobbies", authReq, lobby.List)
 	app.Post("/lobby/create", authReq, lobby.Create)
-	app.Get("/lobby/:id", authReq, lobby.Get)
+	app.Get("/lobby/:id", lobby.Get) // публичный просмотр (гости видят сетку, без реквизитов)
 	app.Delete("/lobby/:id", authReq, lobby.Delete)
 	app.Post("/lobby/:id/join", authReq, lobby.Join)
 	app.Post("/lobby/:id/leave", authReq, lobby.Leave)

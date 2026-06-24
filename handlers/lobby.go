@@ -215,7 +215,12 @@ func (h *LobbyHandler) Get(c *fiber.Ctx) error {
 		}
 		return fiber.NewError(fiber.StatusNotFound, "лобби не найдено")
 	}
-	return c.JSON(h.view(ctx, l))
+	v := h.view(ctx, l)
+	// Гостям (без входа) не показываем платёжные реквизиты.
+	if !middleware.IsAuthed(c, h.Cfg.JWTSecret) {
+		delete(v, "payment_details")
+	}
+	return c.JSON(v)
 }
 
 // Delete — DELETE /lobby/:id. Только создатель и только пока лобби открыто.

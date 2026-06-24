@@ -89,6 +89,12 @@ func RequireAuth(secret string) fiber.Handler {
 	}
 }
 
+// IsAuthed проверяет, есть ли валидная пользовательская сессия (cookie token).
+func IsAuthed(c *fiber.Ctx, secret string) bool {
+	_, ok := parseUserID(secret, c.Cookies(CookieName))
+	return ok
+}
+
 // UserID достаёт ObjectID текущего пользователя из контекста (после RequireAuth).
 func UserID(c *fiber.Ctx) primitive.ObjectID {
 	if id, ok := c.Locals("userID").(primitive.ObjectID); ok {

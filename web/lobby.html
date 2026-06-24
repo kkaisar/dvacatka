@@ -63,8 +63,9 @@
           <div class="muted text-sm mt-1">${t.label} · ${lobby.players_count}/${lobby.max_players} игроков · ${lobby.team_count} команд</div>
           ${paymentBlock()}
         </div>`;
+      const guestBanner = me ? "" : `<div class="alert alert--info mb-4">👀 Вы смотрите как гость. <a href="/login.html" style="color:var(--accent);font-weight:600">Войдите</a>, чтобы участвовать.</div>`;
       const map = { open: renderOpen, draft: renderDraft, active: renderActive, finished: renderFinished };
-      document.getElementById("body").innerHTML = (map[lobby.status] || (() => ""))();
+      document.getElementById("body").innerHTML = guestBanner + (map[lobby.status] || (() => ""))();
     }
 
     function paymentBlock() {
@@ -75,10 +76,10 @@
 
     // ---------- ЭТАП 1: СБОР ИГРОКОВ ----------
     function renderOpen() {
-      const inLobby = lobby.players.some(p => p.user_id === me.id);
+      const inLobby = me && lobby.players.some(p => p.user_id === me.id);
       const full = lobby.players_count >= lobby.max_players;
       const rows = lobby.players.map(p => {
-        const meRow = p.user_id === me.id;
+        const meRow = me && p.user_id === me.id;
         const paid = p.paid
           ? `<span style="color:var(--green)">✅ оплатил</span>`
           : `<span class="muted">не оплатил</span>`;
@@ -111,7 +112,7 @@
       const enoughCaps = captains >= lobby.team_count;
 
       let controls = "";
-      if (!inLobby && !full) controls += `<button onclick="joinLobby()" class="btn btn--primary">${creatorIsSpectator() && isCreator() ? "Войти как игрок" : "Войти в лобби"}</button>`;
+      if (me && !inLobby && !full) controls += `<button onclick="joinLobby()" class="btn btn--primary">${creatorIsSpectator() && isCreator() ? "Войти как игрок" : "Войти в лобби"}</button>`;
       if (inLobby && !isCreator()) controls += `<button onclick="act('POST','/lobby/${LID}/leave')" class="btn btn--ghost">Выйти</button>`;
       // Создатель может стать зрителем (выйти из игроков, но продолжить вести лобби).
       if (isCreator() && inLobby) controls += `<button onclick="act('POST','/lobby/${LID}/spectate')" class="btn btn--ghost" title="Не играть, только следить">Стать зрителем 👁</button>`;
@@ -150,13 +151,13 @@
     // ---------- ЭТАП 2: ДРАФТ ----------
     function renderDraft() {
       const s = draftState;
-      const meIsCurrent = s.picking && s.current_captain === me.id;
+      const meIsCurrent = me && s.picking && s.current_captain === me.id;
       const cols = s.teams.map(team => {
         const slots = team.slots.map(sl =>
           `<a href="/player.html?id=${sl.user_id}" class="flex items-center justify-between text-sm py-1.5 hover:underline">
             <span>${esc(sl.nickname || sl.user_id.slice(-6))}</span><span class="cat">${esc(sl.category)}</span></a>`).join("");
         const empty = !team.captain_id;
-        const canCaptain = empty && !s.picking && me.category === "Captain";
+        const canCaptain = empty && !s.picking && me && me.category === "Captain";
         const cap = empty
           ? (canCaptain
               ? `<button onclick="act('POST','/lobby/${LID}/claim-captain/${team.id}')" class="btn btn--primary btn--sm btn--block mb-2">Стать капитаном</button>`
@@ -351,11 +352,19 @@
       sock.onclose = () => setTimeout(connectWS, 2000);
     }
 
+    function guestNav() {
+      return `<header class="nav"><div class="nav__inner">
+        <a href="/" class="nav__brand">🎮 Dva<span class="dot">·</span>catka</a>
+        <nav class="nav__links"><span class="nav__user">Гость</span>
+        <a href="/login.html" class="btn btn--primary btn--sm">Войти</a></nav>
+      </div></header>`;
+    }
     async function init() {
-      me = await requireAuth();
-      document.getElementById("nav").innerHTML = navBar(me);
-      // Если есть активная админ-сессия — даём god-mode управление этим лобби.
-      try { await api("GET", "/admin/me"); isAdmin = true; } catch {}
+      // Гость тоже может смотреть лобби/сетку — без принудительного входа.
+      try { me = await api("GET", "/profile"); } catch { me = null; }
+      document.getElementById("nav").innerHTML = me ? navBar(me) : guestNav();
+      // Админ-управление только для залогиненного (god-mode требует и user, и admin сессию).
+      if (me) { try { await api("GET", "/admin/me"); isAdmin = true; } catch {} }
       try { await reload(); } catch (err) { flashErr(err.message); return; }
       connectWS();
     }
