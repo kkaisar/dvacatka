@@ -18,20 +18,6 @@
   </main>
 
   <script>
-    function statCard(label, val) {
-      return `<div class="card card--pad text-center" style="padding:14px">
-        <div class="text-2xl font-extrabold" style="color:var(--accent)">${val}</div>
-        <div class="muted text-xs mt-1">${label}</div></div>`;
-    }
-    function statsBlock(s) {
-      if (!s || !s.matches) return `<div class="muted text-sm mt-4">Статистика матчей пока не добавлена.</div>`;
-      return `<div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
-        ${statCard("KD", s.kd)}
-        ${statCard("Сред. киллов", s.avg_kills)}
-        ${statCard("Матчей", s.matches)}
-        ${statCard("Всего киллов", s.total_kills)}
-      </div>`;
-    }
     async function load() {
       const me = await requireAuth();
       document.getElementById("nav").innerHTML = navBar(me);
@@ -51,8 +37,7 @@
               <span class="muted">📞 ${esc(p.phone)}</span>
             </div>
           </div>
-        </div>
-        ${statsBlock(p.stats)}`;
+        </div>`;
       const h = p.game_history || [];
       document.getElementById("history").innerHTML = h.length
         ? h.map(g => `<a href="/lobby.html?id=${g.lobby_id}" class="block card card--hover px-5 py-4">

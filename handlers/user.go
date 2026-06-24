@@ -135,47 +135,7 @@ func (h *UserHandler) PublicProfile(c *fiber.Ctx) error {
 		"category":     u.Category,
 		"phone":        u.Phone,
 		"game_history": history,
-		"stats":        h.statsSummary(ctx, u.ID),
 	})
-}
-
-// statsSummary считает общую статистику игрока по всем матчам: avg kills, KD и т.д.
-func (h *UserHandler) statsSummary(ctx context.Context, uid primitive.ObjectID) fiber.Map {
-	cur, err := h.DB.Collection("match_stats").Find(ctx, bson.M{"user_id": uid})
-	if err != nil {
-		return fiber.Map{"matches": 0}
-	}
-	defer cur.Close(ctx)
-	var docs []struct {
-		Kills   int `bson:"kills"`
-		Deaths  int `bson:"deaths"`
-		Assists int `bson:"assists"`
-	}
-	if cur.All(ctx, &docs) != nil || len(docs) == 0 {
-		return fiber.Map{"matches": 0}
-	}
-	var k, d, a int
-	for _, s := range docs {
-		k += s.Kills
-		d += s.Deaths
-		a += s.Assists
-	}
-	n := len(docs)
-	kd := float64(k)
-	if d > 0 {
-		kd = float64(k) / float64(d)
-	}
-	round1 := func(f float64) float64 { return float64(int(f*100+0.5)) / 100 }
-	return fiber.Map{
-		"matches":      n,
-		"total_kills":  k,
-		"total_deaths": d,
-		"total_assists": a,
-		"avg_kills":    round1(float64(k) / float64(n)),
-		"avg_deaths":   round1(float64(d) / float64(n)),
-		"avg_assists":  round1(float64(a) / float64(n)),
-		"kd":           round1(kd),
-	}
 }
 
 // gameHistory подтягивает краткую инфу по сыгранным лобби.
