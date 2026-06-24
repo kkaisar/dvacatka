@@ -228,19 +228,30 @@
     }
     function renderActive() {
       const b = lobby.bracket || { rounds: [] };
-      const cols = b.rounds.map((r, ri) => {
-        const matches = r.matches.map(m => matchCard(m, ri === b.rounds.length - 1)).join("");
-        return `<div class="flex-1 min-w-[210px]">
-          <div class="muted text-xs mb-2 text-center uppercase tracking-wide">${ri === b.rounds.length - 1 ? "Финал" : "Раунд " + (ri + 1)}</div>
-          <div class="space-y-3">${matches}</div></div>`;
+      const last = b.rounds.length - 1;
+      const rounds = b.rounds.map((r, ri) => {
+        const title = ri === last ? "Финал" : (b.rounds.length === 2 ? "Полуфинал" : "Раунд " + (ri + 1));
+        const matches = r.matches.map(m => matchCard(m, ri === last)).join("");
+        return `<div class="br-round ${ri === last ? "br-final" : ""}">
+          <div class="br-round__title">${title}</div>
+          <div class="br-matches">${matches}</div>
+        </div>`;
       }).join("");
 
       const champ = bracketChampion(b);
+      const champCol = `<div class="br-champion">
+        <div class="br-trophy">🏆</div>
+        <div class="br-champ-name">${champ ? esc(teamName(champ)) : "—"}</div>
+        <div class="br-champ-sub">${champ ? "Чемпион" : "идёт турнир"}</div>
+      </div>`;
+
       let finishBtn = "";
-      if (isManager() && champ) finishBtn = `<button onclick="act('POST','/lobby/${LID}/finish')" class="btn btn--primary mt-4">🏆 Объявить победителя</button>`;
+      if (isManager() && champ && lobby.status === "active") {
+        finishBtn = `<div><button onclick="act('POST','/lobby/${LID}/finish')" class="btn btn--primary mt-4">🏆 Объявить победителя</button></div>`;
+      }
 
       return `<div class="mt-4">
-        <div class="flex gap-4 overflow-x-auto pb-2">${cols}</div>
+        <div class="bracket">${rounds}${champCol}</div>
         ${finishBtn}
       </div>`;
     }
@@ -252,26 +263,22 @@
     function matchCard(m, isFinal) {
       const ready = m.team1 != null && m.team2 != null;
       const w = m.winner;
-      const side = (id, score) => {
-        if (id == null) return `<div class="muted text-sm py-1.5">— ожидание —</div>`;
+      const row = (id, score) => {
+        if (id == null) return `<div class="br-match__row br-match__row--tbd"><span>— ожидание —</span><span></span></div>`;
         const win = w === id;
-        return `<div class="flex justify-between text-sm py-1.5 ${win ? "font-bold" : ""}" ${win ? 'style="color:var(--green)"' : ''}>
-          <span>${esc(teamName(id))}${win ? " ✅" : ""}</span><span>${score}</span></div>`;
+        return `<div class="br-match__row ${win ? "br-match__row--win" : ""}">
+          <span>${esc(teamName(id))}${win ? " 🏆" : ""}</span><span class="br-match__score">${score}</span></div>`;
       };
-      let input = "";
+      // BO3: счёт по картам, варианты 2:0 / 2:1 / 1:2 / 0:2
+      let bo3 = "";
       if (isManager() && ready && !w) {
-        input = `<form onsubmit="submitScore(event,${m.id})" class="flex gap-1 mt-2">
-          <input name="score1" type="number" min="0" required class="input" style="width:56px;padding:6px" placeholder="т1" />
-          <input name="score2" type="number" min="0" required class="input" style="width:56px;padding:6px" placeholder="т2" />
-          <button class="btn btn--primary btn--sm">OK</button></form>`;
+        const btn = (a, bb) => `<button onclick="submitScore(${m.id},${a},${bb})" class="btn btn--ghost btn--sm">${a}:${bb}</button>`;
+        bo3 = `<div class="br-bo3">${btn(2,0)}${btn(2,1)}${btn(1,2)}${btn(0,2)}</div>`;
       }
-      const ring = isFinal ? 'style="border-color:var(--accent)"' : '';
-      return `<div class="card card--pad" ${ring} style="padding:14px">${side(m.team1, m.score1)}${side(m.team2, m.score2)}${input}</div>`;
+      return `<div class="br-match">${row(m.team1, m.score1)}${row(m.team2, m.score2)}${bo3}</div>`;
     }
-    async function submitScore(e, mid) {
-      e.preventDefault();
-      const f = e.target;
-      await act("POST", `/lobby/${LID}/match/${mid}/result`, { score1: +f.score1.value, score2: +f.score2.value });
+    async function submitScore(mid, s1, s2) {
+      await act("POST", `/lobby/${LID}/match/${mid}/result`, { score1: s1, score2: s2 });
     }
 
     // ---------- ЭТАП 4: ЗАВЕРШЕНИЕ ----------

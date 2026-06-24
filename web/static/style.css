@@ -117,6 +117,43 @@ a { color: inherit; text-decoration: none; }
 .row { display: flex; align-items: center; justify-content: space-between; padding: 11px 0; border-bottom: 1px solid var(--border); }
 .row:last-child { border-bottom: 0; }
 
+/* ===== Турнирная сетка ===== */
+.bracket { display: flex; align-items: stretch; overflow-x: auto; padding: 10px 0 18px; }
+.br-round { display: flex; flex-direction: column; padding-right: 28px; min-width: 210px; }
+.br-round__title { text-align: center; font-size: .72rem; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin-bottom: 10px; font-weight: 700; }
+.br-matches { flex: 1; display: flex; flex-direction: column; justify-content: space-around; gap: 16px; }
+.br-match {
+  position: relative;
+  background: linear-gradient(180deg, var(--surface), var(--bg-soft));
+  border: 1px solid var(--border); border-radius: 12px; overflow: hidden;
+  box-shadow: 0 6px 18px -10px rgba(0,0,0,.5);
+}
+.br-match__row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 10px 13px; font-size: .9rem; }
+.br-match__row + .br-match__row { border-top: 1px solid var(--border); }
+.br-match__row--win { color: var(--green); font-weight: 700; background: rgba(52,211,153,.07); }
+.br-match__row--tbd { color: var(--muted); }
+.br-match__score { font-variant-numeric: tabular-nums; font-weight: 800; min-width: 16px; text-align: right; }
+.br-final .br-match { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-glow), 0 8px 24px -10px var(--accent-glow); }
+
+/* соединительные линии: горизонтальный стык к следующему раунду */
+.br-round:not(.br-final) .br-match::after {
+  content: ''; position: absolute; top: 50%; right: -28px; width: 28px; height: 2px; background: var(--border);
+}
+
+/* колонка чемпиона с кубком */
+.br-champion { display: flex; flex-direction: column; align-items: center; justify-content: center; min-width: 180px; padding-left: 4px; }
+.br-trophy {
+  width: 88px; height: 88px; border-radius: 22px; display: flex; align-items: center; justify-content: center;
+  font-size: 2.6rem; background: linear-gradient(135deg, var(--accent), var(--accent-600)); color: #1a1206;
+  box-shadow: 0 14px 34px -10px var(--accent-glow);
+}
+.br-champ-name { margin-top: 12px; font-weight: 800; font-size: 1.15rem; text-align: center; }
+.br-champ-sub { color: var(--muted); font-size: .8rem; }
+
+/* кнопки счёта BO3 */
+.br-bo3 { display: flex; gap: 5px; padding: 9px 11px 11px; border-top: 1px dashed var(--border); }
+.br-bo3 .btn { flex: 1; padding: 6px 0; }
+
 .muted { color: var(--muted); }
 .tabs { display: flex; background: var(--bg-soft); border: 1px solid var(--border); border-radius: 12px; padding: 4px; }
 .tab { flex: 1; padding: 9px; border-radius: 9px; font-weight: 600; font-size: .9rem; border: 0; background: none; color: var(--muted); cursor: pointer; transition: all .15s; }
