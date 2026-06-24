@@ -13,10 +13,11 @@ const (
 	CategoryA       Category = "A"
 	CategoryB       Category = "B"
 	CategoryC       Category = "C"
+	CategoryD       Category = "Д"
 	CategoryCaptain Category = "Captain"
 )
 
-// CategoryRank задаёт порядок сортировки категорий: A, B, C, Captain.
+// CategoryRank задаёт порядок сортировки категорий: A, B, C, Д, Captain.
 func CategoryRank(c Category) int {
 	switch c {
 	case CategoryA:
@@ -25,10 +26,12 @@ func CategoryRank(c Category) int {
 		return 1
 	case CategoryC:
 		return 2
-	case CategoryCaptain:
+	case CategoryD:
 		return 3
-	default:
+	case CategoryCaptain:
 		return 4
+	default:
+		return 5
 	}
 }
 

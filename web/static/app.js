@@ -30,7 +30,7 @@ async function requireAuth() {
   }
 }
 
-const CATEGORIES = ["A", "B", "C", "Captain"];
+const CATEGORIES = ["A", "B", "C", "Д", "Captain"];
 
 const LOBBY_TYPES = {
   dvacatka: { label: "Двацатка", players: 20, teams: 4 },

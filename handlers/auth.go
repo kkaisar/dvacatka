@@ -36,7 +36,7 @@ func (h *AuthHandler) users() *mongo.Collection {
 // validCategory проверяет, что категория из допустимого набора.
 func validCategory(c models.Category) bool {
 	switch c {
-	case models.CategoryA, models.CategoryB, models.CategoryC, models.CategoryCaptain:
+	case models.CategoryA, models.CategoryB, models.CategoryC, models.CategoryD, models.CategoryCaptain:
 		return true
 	}
 	return false
