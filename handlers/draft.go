@@ -125,12 +125,15 @@ func (h *DraftHandler) ClaimCaptain(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusForbidden, "вы не в этом лобби")
 	}
 
-	// Проверяем категорию из БД.
-	var u models.User
-	if err := h.DB.Collection("users").FindOne(ctx, bson.M{"_id": uid}).Decode(&u); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "пользователь не найден")
+	// Проверяем тир в рамках лобби (с запасом на глобальную категорию).
+	cat := lobbyCat(l, uid)
+	if cat == "" {
+		var u models.User
+		if h.DB.Collection("users").FindOne(ctx, bson.M{"_id": uid}).Decode(&u) == nil {
+			cat = u.Category
+		}
 	}
-	if u.Category != models.CategoryCaptain {
+	if cat != models.CategoryCaptain {
 		return fiber.NewError(fiber.StatusForbidden, "только игрок категории Captain может стать капитаном")
 	}
 	// Один капитан — одна команда.
@@ -151,7 +154,7 @@ func (h *DraftHandler) ClaimCaptain(c *fiber.Ctx) error {
 	}
 
 	l.Teams[idx].CaptainID = uid
-	l.Teams[idx].Slots = append(l.Teams[idx].Slots, models.TeamSlot{UserID: uid, Category: models.CategoryCaptain})
+	l.Teams[idx].Slots = append(l.Teams[idx].Slots, models.TeamSlot{UserID: uid, Category: cat})
 
 	// Если все команды получили капитанов — жеребьёвка порядка пиков.
 	if allCaptained(l) {
@@ -203,12 +206,15 @@ func (h *DraftHandler) Pick(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusConflict, "игрок уже в команде")
 	}
 
-	// Категория пикнутого игрока.
-	var u models.User
-	if err := h.DB.Collection("users").FindOne(ctx, bson.M{"_id": target}).Decode(&u); err != nil {
-		return fiber.NewError(fiber.StatusInternalServerError, "игрок не найден")
+	// Категория пикнутого игрока — лобби-локальный тир (с запасом на глобальную).
+	cat := lobbyCat(l, target)
+	if cat == "" {
+		var u models.User
+		if h.DB.Collection("users").FindOne(ctx, bson.M{"_id": target}).Decode(&u) == nil {
+			cat = u.Category
+		}
 	}
-	l.Teams[curIdx].Slots = append(l.Teams[curIdx].Slots, models.TeamSlot{UserID: target, Category: u.Category})
+	l.Teams[curIdx].Slots = append(l.Teams[curIdx].Slots, models.TeamSlot{UserID: target, Category: cat})
 	// Запоминаем пик в истории (для возможной отмены).
 	l.Draft.History = append(l.Draft.History, models.PickRecord{TeamID: currentTeamID, UserID: target})
 
@@ -398,9 +404,24 @@ func (h *DraftHandler) nicknames(ctx context.Context, l models.Lobby) map[primit
 func (h *DraftHandler) categories(ctx context.Context, l models.Lobby) map[primitive.ObjectID]models.Category {
 	m := map[primitive.ObjectID]models.Category{}
 	for _, u := range h.usersInLobby(ctx, l) {
-		m[u.ID] = u.Category
+		m[u.ID] = u.Category // глобальная как запасной вариант
+	}
+	for _, p := range l.Players {
+		if p.Category != "" {
+			m[p.UserID] = p.Category // лобби-локальный тир в приоритете
+		}
 	}
 	return m
+}
+
+// lobbyCat возвращает тир игрока в рамках лобби (снимок/переопределение создателем).
+func lobbyCat(l models.Lobby, uid primitive.ObjectID) models.Category {
+	for _, p := range l.Players {
+		if p.UserID == uid {
+			return p.Category
+		}
+	}
+	return ""
 }
 
 // --- вспомогательные чистые функции ---

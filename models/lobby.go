@@ -32,10 +32,13 @@ type PaymentDetails struct {
 }
 
 // LobbyPlayer — игрок внутри лобби.
+// Category — тир игрока в рамках ЭТОГО лобби (снимок при входе, может менять создатель),
+// он не влияет на глобальную категорию профиля.
 type LobbyPlayer struct {
-	UserID primitive.ObjectID  `bson:"user_id" json:"user_id"`
-	Paid   bool                `bson:"paid" json:"paid"`
-	TeamID *int                `bson:"team_id,omitempty" json:"team_id,omitempty"`
+	UserID   primitive.ObjectID `bson:"user_id" json:"user_id"`
+	Paid     bool               `bson:"paid" json:"paid"`
+	Category Category           `bson:"category" json:"category"`
+	TeamID   *int               `bson:"team_id,omitempty" json:"team_id,omitempty"`
 }
 
 // TeamSlot — занятый слот в составе команды.

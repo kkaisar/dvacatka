@@ -64,6 +64,7 @@ func main() {
 	app.Post("/lobby/:id/leave", authReq, lobby.Leave)
 	app.Post("/lobby/:id/toggle-paid", authReq, lobby.TogglePaid)
 	app.Post("/lobby/:id/kick/:user_id", authReq, lobby.Kick)
+	app.Post("/lobby/:id/set-tier/:user_id", authReq, lobby.SetTier)
 
 	// --- Драфт (этап пиков) ---
 	draft := handlers.NewDraftHandler(database, cfg, hub)

@@ -59,14 +59,32 @@ func (h *LobbyHandler) playerInfo(ctx context.Context, l models.Lobby) map[strin
 	if cur.All(ctx, &users) != nil {
 		return info
 	}
+	// Ник — из профиля; категория — лобби-локальная (тир в рамках этого лобби).
+	localCat := map[primitive.ObjectID]models.Category{}
+	for _, p := range l.Players {
+		localCat[p.UserID] = p.Category
+	}
 	for _, u := range users {
-		info[u.ID.Hex()] = fiber.Map{"nickname": u.Nickname, "category": u.Category}
+		cat := localCat[u.ID]
+		if cat == "" {
+			cat = u.Category // запасной вариант для старых лобби без снимка
+		}
+		info[u.ID.Hex()] = fiber.Map{"nickname": u.Nickname, "category": cat}
 	}
 	return info
 }
 
 func (h *LobbyHandler) lobbies() *mongo.Collection {
 	return h.DB.Collection("lobbies")
+}
+
+// userCategory возвращает глобальную категорию пользователя (для снимка при входе в лобби).
+func (h *LobbyHandler) userCategory(ctx context.Context, uid primitive.ObjectID) models.Category {
+	var u models.User
+	if err := h.DB.Collection("users").FindOne(ctx, bson.M{"_id": uid}).Decode(&u); err != nil {
+		return ""
+	}
+	return u.Category
 }
 
 // findLobby достаёт лобби по hex-id из параметра :id.
@@ -107,6 +125,9 @@ func (h *LobbyHandler) Create(c *fiber.Ctx) error {
 		return fiber.NewError(fiber.StatusBadRequest, "недопустимый тип лобби")
 	}
 
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
 	uid := middleware.UserID(c)
 	lobby := models.Lobby{
 		Name:       req.Name,
@@ -120,15 +141,12 @@ func (h *LobbyHandler) Create(c *fiber.Ctx) error {
 			Phone: strings.TrimSpace(req.PaymentPhone),
 			Card:  strings.TrimSpace(req.PaymentCard),
 		},
-		// Создатель сразу попадает в список игроков.
-		Players:   []models.LobbyPlayer{{UserID: uid, Paid: false}},
+		// Создатель сразу попадает в список игроков (с тиром из своего профиля).
+		Players:   []models.LobbyPlayer{{UserID: uid, Paid: false, Category: h.userCategory(ctx, uid)}},
 		Teams:     []models.Team{},
 		Bracket:   models.Bracket{Rounds: []models.Round{}},
 		CreatedAt: time.Now(),
 	}
-
-	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
-	defer cancel()
 
 	res, err := h.lobbies().InsertOne(ctx, lobby)
 	if err != nil {
@@ -256,7 +274,7 @@ func (h *LobbyHandler) Join(c *fiber.Ctx) error {
 	}
 
 	_, err = h.lobbies().UpdateByID(ctx, l.ID, bson.M{
-		"$push": bson.M{"players": models.LobbyPlayer{UserID: uid, Paid: false}},
+		"$push": bson.M{"players": models.LobbyPlayer{UserID: uid, Paid: false, Category: h.userCategory(ctx, uid)}},
 	})
 	if err != nil {
 		return fiber.NewError(fiber.StatusInternalServerError, "не удалось войти в лобби")
@@ -350,6 +368,49 @@ func (h *LobbyHandler) Kick(c *fiber.Ctx) error {
 	}
 	h.broadcast(ctx, l.ID.Hex())
 	return c.JSON(fiber.Map{"ok": true})
+}
+
+type setTierReq struct {
+	Category string `json:"category"`
+}
+
+// SetTier — POST /lobby/:id/set-tier/:user_id. Создатель меняет тир игрока
+// ТОЛЬКО в рамках этого лобби (глобальный профиль игрока не меняется).
+func (h *LobbyHandler) SetTier(c *fiber.Ctx) error {
+	ctx, cancel := context.WithTimeout(c.Context(), 10*time.Second)
+	defer cancel()
+
+	l, err := h.loadOpen(c, ctx)
+	if err != nil {
+		return err
+	}
+	if l.CreatorID != middleware.UserID(c) {
+		return fiber.NewError(fiber.StatusForbidden, "менять тир может только создатель")
+	}
+	target, err := primitive.ObjectIDFromHex(c.Params("user_id"))
+	if err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "неверный id игрока")
+	}
+	var req setTierReq
+	if err := c.BodyParser(&req); err != nil {
+		return fiber.NewError(fiber.StatusBadRequest, "неверный формат запроса")
+	}
+	if !validCategory(models.Category(req.Category)) {
+		return fiber.NewError(fiber.StatusBadRequest, "недопустимая категория")
+	}
+	if !hasPlayer(l, target) {
+		return fiber.NewError(fiber.StatusBadRequest, "игрок не в лобби")
+	}
+
+	res, err := h.lobbies().UpdateOne(ctx,
+		bson.M{"_id": l.ID, "players.user_id": target},
+		bson.M{"$set": bson.M{"players.$.category": req.Category}},
+	)
+	if err != nil || res.MatchedCount == 0 {
+		return fiber.NewError(fiber.StatusInternalServerError, "не удалось изменить тир")
+	}
+	h.broadcast(ctx, l.ID.Hex())
+	return c.JSON(fiber.Map{"ok": true, "category": req.Category})
 }
 
 // loadOpen загружает лобби и требует статус "open" (этап сбора игроков).

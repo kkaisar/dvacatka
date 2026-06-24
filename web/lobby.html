@@ -82,12 +82,17 @@
         const kick = (isCreator() && !meRow)
           ? `<button onclick="act('POST','/lobby/${LID}/kick/${p.user_id}')" class="btn btn--danger btn--sm">Выгнать</button>`
           : "";
+        // Создатель может менять тир игрока только в рамках этого лобби.
+        const tier = isCreator()
+          ? `<select onchange="setTier('${p.user_id}', this.value)" class="select" style="width:auto;padding:6px 10px;font-size:.8rem" title="Тир в этом лобби">
+              ${CATEGORIES.map(c => `<option value="${c}" ${catOf(p.user_id) === c ? "selected" : ""}>${c}</option>`).join("")}
+            </select>`
+          : `<span class="cat">${esc(catOf(p.user_id))}</span>`;
         return `<div class="row">
           <a href="/player.html?id=${p.user_id}" class="font-medium hover:underline flex items-center gap-2">
             ${esc(nick(p.user_id))}${meRow ? " (вы)" : ""}${p.user_id === lobby.creator_id ? " 👑" : ""}
-            <span class="cat">${esc(catOf(p.user_id))}</span>
           </a>
-          <div class="flex items-center gap-3 text-sm">${paid}${toggle}${kick}</div>
+          <div class="flex items-center gap-3 text-sm">${tier}${paid}${toggle}${kick}</div>
         </div>`;
       }).join("");
 
@@ -109,6 +114,9 @@
       let pw;
       if (lobby.has_password) { pw = prompt("Пароль лобби:"); if (pw === null) return; }
       await act("POST", "/lobby/" + LID + "/join", { password: pw || "" });
+    }
+    async function setTier(uid, cat) {
+      await act("POST", `/lobby/${LID}/set-tier/${uid}`, { category: cat });
     }
 
     // ---------- ЭТАП 2: ДРАФТ ----------
